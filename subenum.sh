@@ -9,8 +9,8 @@
 #   /httpx subdomains.txt        -> bot waits for 'subdomains.txt' upload
 # ============================================
 
-BOT_TOKEN="YOUR_TELEGRAM_BOT_TOKEN"
-CHAT_ID="YOUR_TELEGRAM_CHAT_ID"        # e.g. -123456789 for a group
+BOT_TOKEN="YOUR TELEGRAM BOT TOKEN"
+CHAT_ID="ENTER CHAT ID"   # replace with your chat/group ID
 OFFSET=0
 
 BASE_DIR="$HOME/subdomains"
@@ -62,12 +62,11 @@ Enum tools:
 - amass (passive)
 - alterx + dnsx
 - crt.sh API
-- anubis API
 - github-subdomains
 
 Results (per domain):
 ~/subdomains/<domain>/
-- subfinder.txt, assetfinder.txt, amass.txt, alterx.txt, crtsh.txt, anubis.txt, github.txt
+- subfinder.txt, assetfinder.txt, amass.txt, alterx.txt, crtsh.txt, github.txt
 - final.txt (unique)
 📦 A ZIP with all files is sent to Telegram with counts + total time.
 
@@ -159,28 +158,18 @@ run_enum() {
         | grep -Eo "[a-zA-Z0-9._-]+\.$domain" | sort -u > "$OUT_DIR/crtsh.txt"
     fi
 
-    # anubis
-    if command -v jq >/dev/null 2>&1; then
-      curl -s "https://jldc.me/anubis/subdomains/$domain" \
-        | jq -r '.[]' 2>/dev/null | sort -u > "$OUT_DIR/anubis.txt"
-    else
-      curl -s "https://jldc.me/anubis/subdomains/$domain" \
-        | grep -Eo "[a-zA-Z0-9._-]+\.$domain" | sort -u > "$OUT_DIR/anubis.txt"
-    fi
-
-    run_tool "github-subdomains -d $domain | grep -Eo \"([a-zA-Z0-9_-]+\\.)+$domain\"" "$OUT_DIR/github.txt"
+    run_tool "github-subdomains -d $domain -t ~/go/bin/.tokens | grep -Eo \"([a-zA-Z0-9_-]+\\.)+$domain\"" "$OUT_DIR/github.txt"
 
     # Merge safely
     find "$OUT_DIR" -type f -name "*.txt" -exec cat {} + 2>/dev/null \
       | grep -v '^\[!\]' | sort -u > "$OUT_DIR/final.txt"
 
-    local SUBF ASSET AMASS ALTERX CRT ANUBIS GITHUB FINAL
+    local SUBF ASSET AMASS ALTERX CRT GITHUB FINAL
     SUBF=$(count_lines "$OUT_DIR/subfinder.txt")
     ASSET=$(count_lines "$OUT_DIR/assetfinder.txt")
     AMASS=$(count_lines "$OUT_DIR/amass.txt")
     ALTERX=$(count_lines "$OUT_DIR/alterx.txt")
     CRT=$(count_lines "$OUT_DIR/crtsh.txt")
-    ANUBIS=$(count_lines "$OUT_DIR/anubis.txt")
     GITHUB=$(count_lines "$OUT_DIR/github.txt")
     FINAL=$(count_lines "$OUT_DIR/final.txt")
 
@@ -202,7 +191,6 @@ run_enum() {
 🔹 amass: $AMASS
 🔹 alterx: $ALTERX
 🔹 crt.sh: $CRT
-🔹 anubis: $ANUBIS
 🔹 github: $GITHUB
 
 📦 Final unique subdomains: $FINAL
