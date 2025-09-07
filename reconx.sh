@@ -47,7 +47,7 @@ help_menu() {
 Usage:
 /reconx <domain>        Run enumeration for a single domain
 /reconx <file.txt>      Bot waits for that file upload, then runs enum for all domains in it
-/httpx <file.txt>       Bot waits for that file upload, then runs httpx-toolkit only
+/httpx <file.txt>       Bot waits for that file upload, then runs httpx only
 /nuclei urls.txt -t private   Run nuclei with private templates (waits for file)
 /nuclei urls.txt -t public    Run nuclei with public templates (waits for file, 500 per batch)
 /reconx -h              Show this help menu
@@ -60,7 +60,7 @@ Results:
 
 Httpx:
 /httpx subdomains.txt
-- Runs httpx-toolkit on file, sends alive subdomains + report
+- Runs httpx on file, sends alive subdomains + report
 
 Nuclei:
 /nuclei urls.txt -t private
@@ -189,21 +189,21 @@ run_httpx() {
     return
   fi
 
-  if ! command -v httpx-toolkit >/dev/null 2>&1; then
-    send_msg "❌ httpx-toolkit not installed."
+  if ! command -v httpx >/dev/null 2>&1; then
+    send_msg "❌ httpx not installed."
     return
   fi
 
   local START END DURATION TOTAL ALIVE OUT_FILE
   START=$(date +%s)
   TOTAL=$(wc -l < "$INPUT" | tr -d ' ')
-  send_msg "🌐 Running httpx-toolkit on $TOTAL subdomains from $(basename "$INPUT") ..."
+  send_msg "🌐 Running httpx on $TOTAL subdomains from $(basename "$INPUT") ..."
 
   OUT_FILE="$(dirname "$INPUT")/subdomains_alive.txt"
 
   # User-specified exact command:
-  # cat subdomain.txt | httpx-toolkit -ports 80,443,8080,8000,8888 -threads 200 > subdomains_alive.txt
-  cat "$INPUT" | httpx-toolkit -ports 80,443,8080,8000,8888 -threads 200 > "$OUT_FILE"
+  # cat subdomain.txt | httpx -ports 80,443,8080,8000,8888 -threads 200 > subdomains_alive.txt
+  cat "$INPUT" | httpx -ports 80,443,8080,8000,8888 -threads 200 -silent -o "$OUT_FILE"
 
   ALIVE=$(wc -l < "$OUT_FILE" | tr -d ' ')
   END=$(date +%s)

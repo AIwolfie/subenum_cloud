@@ -63,7 +63,7 @@ fi
 
 # Install httpx-toolkit
 if ! command -v httpx &>/dev/null; then
-    echo "Installing httpx-toolkit..."
+    echo "Installing httpx..."
     go install github.com/projectdiscovery/httpx/cmd/httpx@latest
     mv ~/go/bin/httpx /usr/local/bin/
 fi
@@ -77,8 +77,13 @@ fi
 
 # Install seclists (for alterx wordlist)
 if [[ ! -d /usr/share/seclists ]]; then
-    echo "Installing seclists..."
-    apt-get install -y seclists
+	echo "Installing seclists..."
+	apt-get install -y seclists
 fi
 
+if ! command -v nuclei &>/dev/null; then
+	echo "Installing nuclei..."
+	go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
+	mv ~/go/bin/nuclei /usr/local/bin
+	
 echo "All dependencies installed successfully!"
