@@ -45,12 +45,12 @@ help_menu() {
 📘 ReconX Bot Help
 
 Usage:
-/reconx <domain>        Run enumeration for a single domain
-/reconx <file.txt>      Bot waits for that file upload, then runs enum for all domains in it
+/subenum <domain>        Run enumeration for a single domain
+/subenum <file.txt>      Bot waits for that file upload, then runs enum for all domains in it
 /httpx <file.txt>       Bot waits for that file upload, then runs httpx only
-/nuclei urls.txt -t private   Run nuclei with private templates (waits for file)
-/nuclei urls.txt -t public    Run nuclei with public templates (waits for file, 500 per batch)
-/reconx -h              Show this help menu
+/nuclei <file.txt> -t private   Run nuclei with private templates (waits for file)
+/nuclei <file.txt> -t public    Run nuclei with public templates (waits for file, 500 per batch)
+/subenum -h              Show this help menu
 
 Enum tools:
 - subfinder, assetfinder, amass, alterx+dnsx, crt.sh, github-subdomains
@@ -63,8 +63,8 @@ Httpx:
 - Runs httpx on file, sends alive subdomains + report
 
 Nuclei:
-/nuclei urls.txt -t private
-/nuclei urls.txt -t public
+/nuclei <file.txt> -t private
+/nuclei <file.txt> -t public
 - Splits results into 50 vulns per file, sends every part
 - Sends progress every 30 min
 - Sends total vulns + time taken at the end
@@ -75,13 +75,17 @@ EOF
 
 STATE_FILE="$WAIT_DIR/${CHAT_ID}.state"
 
-set_wait_state() { printf "action=%s\nexpected=%s\n" "$1" "$2" > "$STATE_FILE"; }
+set_wait_state() {
+  printf "action=%s\nexpected=%s\n" "$1" "$2" > "$STATE_FILE"
+  send_msg "Debug: Set wait state - action=$1, expected=$2"
+}
+
 clear_wait_state() { rm -f "$STATE_FILE"; }
 have_wait_state() { [[ -f "$STATE_FILE" ]]; }
 get_state_val() { grep -E "^${1}=" "$STATE_FILE" 2>/dev/null | cut -d'=' -f2-; }
 
-
 # ------------- Helpers -------------
+
 run_tool() {
   local CMD="$1"
   local OUT="$2"
@@ -223,8 +227,8 @@ EOR
   send_file "$OUT_FILE"
 }
 
-
 # ------------- Nuclei -------------
+
 run_nuclei() {
   local INPUT="$1"; local MODE="$2"
   local start_time=$(date +%s)
@@ -279,7 +283,6 @@ run_nuclei() {
 🕒 Time: ${duration}s
 🔎 Total vulns: $total_vulns"
 }
-
 
 # ------------- Telegram file download -------------
 
@@ -355,32 +358,13 @@ while true; do
           fi
         elif [[ "$TEXT" == /nuclei* ]]; then
           read -r _cmd file _t mode <<<"$TEXT"
-          if [[ -z "$file" || "$file" != *.txt || -z "$mode" || "$mode" != "private" && "$mode" != "public" ]]; then
-            send_msg "❌ Usage: /nuclei urls.txt -t private|public"
+          if [[ -z "$file" || "$file" != *.txt || -z "$mode" || "${mode,,}" != "private" && "${mode,,}" != "public" ]]; then
+            send_msg "❌ Usage: /nuclei <file.txt> -t private|public"
           else
-            set_wait_state "nuclei:$mode" "$file"
+            set_wait_state "nuclei:${mode,,}" "$file"
             send_msg "📥 Send the file '$file' now. I will start nuclei ($mode) when received."
           fi
         fi
-      fi
-
-        # elif [[ "$TEXT" == /nuclei* ]]; then
-        #   read -r _cmd file _t mode <<<"$TEXT"
-        #   if [[ -z "$file" || "$file" != *.txt || -z "$mode" ]]; then
-        #     send_msg "❌ Usage: /nuclei urls.txt -t private|public"
-        #   else
-        #     set_wait_state "nuclei:$mode" "$file"
-        #     send_msg "📥 Send the file '$file' now. I will start nuclei ($mode) when received."
-        #   fi
-        # fi
-		elif [[ "$TEXT" == /nuclei* ]]; then
-  			read -r _cmd file _t mode <<<"$TEXT"
-  		if [[ -z "$file" || "$file" != *.txt || -z "$mode" || "$mode" != "private" && "$mode" != "public" ]]; then
-    		send_msg "❌ Usage: /nuclei urls.txt -t private|public"
-  		else
-			set_wait_state "nuclei:$mode" "$file"
-			send_msg "📥 Send the file '$file' now. I will start nuclei ($mode) when received."
-  		fi
       fi
 
       # Handle incoming document (file upload)
@@ -389,7 +373,7 @@ while true; do
           ACTION=$(get_state_val "action")
           EXPECTED=$(get_state_val "expected")
 
-          if [[ -n "$EXPECTED" && "$DOC_NAME" != "$EXPECTED" ]]; then
+          if [[ -n "$EXPECTED" && "${DOC_NAME,,}" != "${EXPECTED,,}" ]]; then
             send_msg "⚠️ Received '$DOC_NAME' but I'm waiting for '$EXPECTED'. Please resend the correct file."
             continue
           fi
@@ -409,6 +393,9 @@ while true; do
             run_enum "$LOCAL_PATH"
           elif [[ "$ACTION" == "httpx" ]]; then
             run_httpx "$LOCAL_PATH"
+          elif [[ "$ACTION" == nuclei:* ]]; then
+            MODE=${ACTION#nuclei:}
+            run_nuclei "$LOCAL_PATH" "$MODE"
           else
             send_msg "⚠️ Unknown pending action '$ACTION'."
           fi
@@ -418,8 +405,8 @@ while true; do
           [[ -n "$LOCAL_PATH" ]] && send_msg "📎 Saved file '$DOC_NAME' to server."
         fi
       fi
-
     done
   fi
   sleep 5
 done
+
