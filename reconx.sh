@@ -1,21 +1,7 @@
 #!/bin/bash
 
-<<<<<<< HEAD
-# ============================================
-# Telegram Subdomain Bot (waits for file uploads)
-# Commands:
-#   /subenum -h
-#   /subenum example.com
-#   /subenum target.txt          -> bot waits for 'target.txt' upload
-#   /httpx subdomains.txt        -> bot waits for 'subdomains.txt' upload
-# ============================================
-
 BOT_TOKEN="YOUR TELEGRAM BOT TOKEN"
 CHAT_ID="ENTER CHAT ID"   # replace with your chat/group ID
-=======
-BOT_TOKEN="YOUR_TELEGRAM_BOT_TOKEN"
-CHAT_ID="YOUR_TELEGRAM_CHAT_ID"        # e.g. -123456789 for a group
->>>>>>> 4de5502 (subenum)
 OFFSET=0
 
 BASE_DIR="$HOME/subdomains"
@@ -67,29 +53,12 @@ Usage:
 /reconx -h              Show this help menu
 
 Enum tools:
-<<<<<<< HEAD
-- subfinder (all, recursive)
-- assetfinder
-- amass (passive)
-- alterx + dnsx
-- crt.sh API
-- github-subdomains
-
-Results (per domain):
-~/subdomains/<domain>/
-- subfinder.txt, assetfinder.txt, amass.txt, alterx.txt, crtsh.txt, github.txt
-- final.txt (unique)
-📦 A ZIP with all files is sent to Telegram with counts + total time.
-
-Httpx mode:
-=======
 - subfinder, assetfinder, amass, alterx+dnsx, crt.sh, github-subdomains
 Results:
 /home/reconx/<domain>/ with final.txt
 📦 A ZIP with all files sent to Telegram
 
 Httpx:
->>>>>>> 4de5502 (subenum)
 /httpx subdomains.txt
 - Runs httpx-toolkit on file, sends alive subdomains + report
 
@@ -102,8 +71,8 @@ Nuclei:
 EOF
 }
 
-
 # ------------- Waiting state (per chat) -------------
+
 STATE_FILE="$WAIT_DIR/${CHAT_ID}.state"
 
 set_wait_state() { printf "action=%s\nexpected=%s\n" "$1" "$2" > "$STATE_FILE"; }
@@ -233,6 +202,7 @@ run_httpx() {
   OUT_FILE="$(dirname "$INPUT")/subdomains_alive.txt"
 
   # User-specified exact command:
+  # cat subdomain.txt | httpx-toolkit -ports 80,443,8080,8000,8888 -threads 200 > subdomains_alive.txt
   cat "$INPUT" | httpx-toolkit -ports 80,443,8080,8000,8888 -threads 200 > "$OUT_FILE"
 
   ALIVE=$(wc -l < "$OUT_FILE" | tr -d ' ')
