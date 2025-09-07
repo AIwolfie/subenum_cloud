@@ -1,5 +1,6 @@
 #!/bin/bash
 
+<<<<<<< HEAD
 # ============================================
 # Telegram Subdomain Bot (waits for file uploads)
 # Commands:
@@ -11,12 +12,19 @@
 
 BOT_TOKEN="YOUR TELEGRAM BOT TOKEN"
 CHAT_ID="ENTER CHAT ID"   # replace with your chat/group ID
+=======
+BOT_TOKEN="YOUR_TELEGRAM_BOT_TOKEN"
+CHAT_ID="YOUR_TELEGRAM_CHAT_ID"        # e.g. -123456789 for a group
+>>>>>>> 4de5502 (subenum)
 OFFSET=0
 
 BASE_DIR="$HOME/subdomains"
 UPLOADS_DIR="$BASE_DIR/uploads"
 WAIT_DIR="$BASE_DIR/.wait"
 mkdir -p "$BASE_DIR" "$UPLOADS_DIR" "$WAIT_DIR"
+
+PRIVATE_TEMPLATES="/path/to/private/templates"
+NUCLEI_DEFAULT_TEMPLATES="/path/to/nuclei-templates"
 
 # ------------- Utilities -------------
 
@@ -48,15 +56,18 @@ send_file() {
 
 help_menu() {
   cat <<'EOF'
-📘 Subdomain Bot Help
+📘 ReconX Bot Help
 
 Usage:
-/subenum <domain>        Run enumeration for a single domain
-/subenum <file.txt>      Bot waits for that file upload, then runs enum for all domains in it
-/httpx <file.txt>        Bot waits for that file upload, then runs httpx-toolkit only
-/subenum -h              Show this help menu
+/reconx <domain>        Run enumeration for a single domain
+/reconx <file.txt>      Bot waits for that file upload, then runs enum for all domains in it
+/httpx <file.txt>       Bot waits for that file upload, then runs httpx-toolkit only
+/nuclei urls.txt -t private   Run nuclei with private templates (waits for file)
+/nuclei urls.txt -t public    Run nuclei with public templates (waits for file, 500 per batch)
+/reconx -h              Show this help menu
 
 Enum tools:
+<<<<<<< HEAD
 - subfinder (all, recursive)
 - assetfinder
 - amass (passive)
@@ -71,39 +82,37 @@ Results (per domain):
 📦 A ZIP with all files is sent to Telegram with counts + total time.
 
 Httpx mode:
+=======
+- subfinder, assetfinder, amass, alterx+dnsx, crt.sh, github-subdomains
+Results:
+/home/reconx/<domain>/ with final.txt
+📦 A ZIP with all files sent to Telegram
+
+Httpx:
+>>>>>>> 4de5502 (subenum)
 /httpx subdomains.txt
-- runs:  cat subdomains.txt | httpx-toolkit -ports 80,443,8080,8000,8888 -threads 200 > subdomains_alive.txt
-- sends counts, time, and subdomains_alive.txt
+- Runs httpx-toolkit on file, sends alive subdomains + report
+
+Nuclei:
+/nuclei urls.txt -t private
+/nuclei urls.txt -t public
+- Splits results into 50 vulns per file, sends every part
+- Sends progress every 30 min
+- Sends total vulns + time taken at the end
 EOF
 }
 
-# ------------- Waiting state (per chat) -------------
 
-# State file format:
-#   action=subenum|httpx
-#   expected=target.txt
+# ------------- Waiting state (per chat) -------------
 STATE_FILE="$WAIT_DIR/${CHAT_ID}.state"
 
-set_wait_state() {
-  local ACTION="$1"; local EXPECTED="$2"
-  printf "action=%s\nexpected=%s\n" "$ACTION" "$EXPECTED" > "$STATE_FILE"
-}
+set_wait_state() { printf "action=%s\nexpected=%s\n" "$1" "$2" > "$STATE_FILE"; }
+clear_wait_state() { rm -f "$STATE_FILE"; }
+have_wait_state() { [[ -f "$STATE_FILE" ]]; }
+get_state_val() { grep -E "^${1}=" "$STATE_FILE" 2>/dev/null | cut -d'=' -f2-; }
 
-clear_wait_state() {
-  rm -f "$STATE_FILE"
-}
-
-have_wait_state() {
-  [[ -f "$STATE_FILE" ]]
-}
-
-get_state_val() {
-  local KEY="$1"
-  grep -E "^${KEY}=" "$STATE_FILE" 2>/dev/null | cut -d'=' -f2-
-}
 
 # ------------- Helpers -------------
-
 run_tool() {
   local CMD="$1"
   local OUT="$2"
@@ -224,7 +233,6 @@ run_httpx() {
   OUT_FILE="$(dirname "$INPUT")/subdomains_alive.txt"
 
   # User-specified exact command:
-  # cat subdomain.txt | httpx-toolkit -ports 80,443,8080,8000,8888 -threads 200 > subdomains_alive.txt
   cat "$INPUT" | httpx-toolkit -ports 80,443,8080,8000,8888 -threads 200 > "$OUT_FILE"
 
   ALIVE=$(wc -l < "$OUT_FILE" | tr -d ' ')
@@ -244,6 +252,64 @@ EOR
   send_msg "$REPORT"
   send_file "$OUT_FILE"
 }
+
+
+# ------------- Nuclei -------------
+run_nuclei() {
+  local INPUT="$1"; local MODE="$2"
+  local start_time=$(date +%s)
+  local result_file="nuclei_result.txt"
+  > "$result_file"
+
+  if [[ "$MODE" == "private" ]]; then
+    templates="$PRIVATE_TEMPLATES"
+  else
+    templates="$NUCLEI_DEFAULT_TEMPLATES"
+  fi
+
+  send_msg "🚀 Starting nuclei scan on $(basename "$INPUT") with mode: $MODE"
+
+  if [[ "$MODE" == "public" ]]; then
+    mapfile -t templates_list < <(find "$templates" -type f -name "*.yaml")
+    split -l 500 <(printf "%s\n" "${templates_list[@]}") tmpl_chunk_
+  else
+    echo "$templates" > tmpl_chunk_aa
+  fi
+
+  vuln_count=0
+  chunk_idx=0
+  for chunk in tmpl_chunk_*; do
+    [[ ! -f "$chunk" ]] && continue
+    while read -r template_path; do
+      nuclei -l "$INPUT" -t "$template_path" >> "$result_file" 2>/dev/null
+    done < "$chunk"
+    rm -f "$chunk"
+
+    new_vulns=$(wc -l < "$result_file")
+    if (( new_vulns > vuln_count )); then
+      vuln_count=$new_vulns
+      send_msg "📊 Status update: $vuln_count vulns so far..."
+    fi
+  done
+
+  split -l 50 "$result_file" nuclei_result_part_
+  idx=1
+  for part in nuclei_result_part_*; do
+    [[ ! -s "$part" ]] && continue
+    mv "$part" "nuclei_result_part${idx}.txt"
+    send_file "nuclei_result_part${idx}.txt"
+    idx=$((idx+1))
+  done
+
+  end_time=$(date +%s)
+  duration=$((end_time - start_time))
+  total_vulns=$(wc -l < "$result_file")
+
+  send_msg "✅ Nuclei scan completed.
+🕒 Time: ${duration}s
+🔎 Total vulns: $total_vulns"
+}
+
 
 # ------------- Telegram file download -------------
 
@@ -318,6 +384,17 @@ while true; do
           else
             set_wait_state "httpx" "$arg"
             send_msg "📥 Send the file '$arg' now. I will start httpx as soon as I receive it."
+          fi
+        fi
+      fi
+
+        elif [[ "$TEXT" == /nuclei* ]]; then
+          read -r _cmd file _t mode <<<"$TEXT"
+          if [[ -z "$file" || "$file" != *.txt || -z "$mode" ]]; then
+            send_msg "❌ Usage: /nuclei urls.txt -t private|public"
+          else
+            set_wait_state "nuclei:$mode" "$file"
+            send_msg "📥 Send the file '$file' now. I will start nuclei ($mode) when received."
           fi
         fi
       fi
