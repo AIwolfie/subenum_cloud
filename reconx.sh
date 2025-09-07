@@ -331,7 +331,6 @@ while true; do
       if [[ -n "$TEXT" ]]; then
         if [[ "$TEXT" == "/subenum -h" ]]; then
           send_msg "$(help_menu)"
-
         elif [[ "$TEXT" == /subenum* ]]; then
           # Either /subenum <domain> OR /subenum <file.txt>
           read -r _cmd arg <<<"$TEXT"
@@ -345,7 +344,6 @@ while true; do
             # Single domain mode
             run_enum "$arg"
           fi
-
         elif [[ "$TEXT" == /httpx* ]]; then
           # /httpx <file.txt>
           read -r _cmd arg <<<"$TEXT"
@@ -355,18 +353,34 @@ while true; do
             set_wait_state "httpx" "$arg"
             send_msg "📥 Send the file '$arg' now. I will start httpx as soon as I receive it."
           fi
-        fi
-      fi
-
         elif [[ "$TEXT" == /nuclei* ]]; then
           read -r _cmd file _t mode <<<"$TEXT"
-          if [[ -z "$file" || "$file" != *.txt || -z "$mode" ]]; then
+          if [[ -z "$file" || "$file" != *.txt || -z "$mode" || "$mode" != "private" && "$mode" != "public" ]]; then
             send_msg "❌ Usage: /nuclei urls.txt -t private|public"
           else
             set_wait_state "nuclei:$mode" "$file"
             send_msg "📥 Send the file '$file' now. I will start nuclei ($mode) when received."
           fi
         fi
+      fi
+
+        # elif [[ "$TEXT" == /nuclei* ]]; then
+        #   read -r _cmd file _t mode <<<"$TEXT"
+        #   if [[ -z "$file" || "$file" != *.txt || -z "$mode" ]]; then
+        #     send_msg "❌ Usage: /nuclei urls.txt -t private|public"
+        #   else
+        #     set_wait_state "nuclei:$mode" "$file"
+        #     send_msg "📥 Send the file '$file' now. I will start nuclei ($mode) when received."
+        #   fi
+        # fi
+		elif [[ "$TEXT" == /nuclei* ]]; then
+  			read -r _cmd file _t mode <<<"$TEXT"
+  		if [[ -z "$file" || "$file" != *.txt || -z "$mode" || "$mode" != "private" && "$mode" != "public" ]]; then
+    		send_msg "❌ Usage: /nuclei urls.txt -t private|public"
+  		else
+			set_wait_state "nuclei:$mode" "$file"
+			send_msg "📥 Send the file '$file' now. I will start nuclei ($mode) when received."
+  		fi
       fi
 
       # Handle incoming document (file upload)
