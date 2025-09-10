@@ -45,12 +45,12 @@ help_menu() {
 📘 ReconX Bot Help
 
 Usage:
-/reconx <domain>        Run enumeration for a single domain
-/reconx <file.txt>      Bot waits for that file upload, then runs enum for all domains in it
-/httpx <file.txt>       Bot waits for that file upload, then runs httpx-toolkit only
-/nuclei urls.txt -t private   Run nuclei with private templates (waits for file)
-/nuclei urls.txt -t public    Run nuclei with public templates (waits for file, 500 per batch)
-/reconx -h              Show this help menu
+/subenum <domain>        Run enumeration for a single domain
+/subenum <file.txt>      Bot waits for that file upload, then runs enum for all domains in it
+/httpx <file.txt>       Bot waits for that file upload, then runs httpx only
+/nuclei <file.txt> -t private   Run nuclei with private templates (waits for file)
+/nuclei <file.txt> -t public    Run nuclei with public templates (waits for file, 500 per batch)
+/subenum -h              Show this help menu
 
 Enum tools:
 - subfinder, assetfinder, amass, alterx+dnsx, crt.sh, github-subdomains
@@ -60,11 +60,11 @@ Results:
 
 Httpx:
 /httpx subdomains.txt
-- Runs httpx-toolkit on file, sends alive subdomains + report
+- Runs httpx on file, sends alive subdomains + report
 
 Nuclei:
-/nuclei urls.txt -t private
-/nuclei urls.txt -t public
+/nuclei <file.txt> -t private
+/nuclei <file.txt> -t public
 - Splits results into 50 vulns per file, sends every part
 - Sends progress every 30 min
 - Sends total vulns + time taken at the end
@@ -75,13 +75,17 @@ EOF
 
 STATE_FILE="$WAIT_DIR/${CHAT_ID}.state"
 
-set_wait_state() { printf "action=%s\nexpected=%s\n" "$1" "$2" > "$STATE_FILE"; }
+set_wait_state() {
+  printf "action=%s\nexpected=%s\n" "$1" "$2" > "$STATE_FILE"
+  send_msg "Debug: Set wait state - action=$1, expected=$2"
+}
+
 clear_wait_state() { rm -f "$STATE_FILE"; }
 have_wait_state() { [[ -f "$STATE_FILE" ]]; }
 get_state_val() { grep -E "^${1}=" "$STATE_FILE" 2>/dev/null | cut -d'=' -f2-; }
 
-
 # ------------- Helpers -------------
+
 run_tool() {
   local CMD="$1"
   local OUT="$2"
@@ -189,21 +193,21 @@ run_httpx() {
     return
   fi
 
-  if ! command -v httpx-toolkit >/dev/null 2>&1; then
-    send_msg "❌ httpx-toolkit not installed."
+  if ! command -v httpx >/dev/null 2>&1; then
+    send_msg "❌ httpx not installed."
     return
   fi
 
   local START END DURATION TOTAL ALIVE OUT_FILE
   START=$(date +%s)
   TOTAL=$(wc -l < "$INPUT" | tr -d ' ')
-  send_msg "🌐 Running httpx-toolkit on $TOTAL subdomains from $(basename "$INPUT") ..."
+  send_msg "🌐 Running httpx on $TOTAL subdomains from $(basename "$INPUT") ..."
 
   OUT_FILE="$(dirname "$INPUT")/subdomains_alive.txt"
 
   # User-specified exact command:
-  # cat subdomain.txt | httpx-toolkit -ports 80,443,8080,8000,8888 -threads 200 > subdomains_alive.txt
-  cat "$INPUT" | httpx-toolkit -ports 80,443,8080,8000,8888 -threads 200 > "$OUT_FILE"
+  # cat subdomain.txt | httpx -ports 80,443,8080,8000,8888 -threads 200 > subdomains_alive.txt
+  cat "$INPUT" | httpx -ports 80,443,8080,8000,8888 -threads 200 -silent -o "$OUT_FILE"
 
   ALIVE=$(wc -l < "$OUT_FILE" | tr -d ' ')
   END=$(date +%s)
@@ -223,8 +227,8 @@ EOR
   send_file "$OUT_FILE"
 }
 
-
 # ------------- Nuclei -------------
+
 run_nuclei() {
   local INPUT="$1"; local MODE="$2"
   local start_time=$(date +%s)
@@ -280,7 +284,6 @@ run_nuclei() {
 🔎 Total vulns: $total_vulns"
 }
 
-
 # ------------- Telegram file download -------------
 
 download_document() {
@@ -331,7 +334,6 @@ while true; do
       if [[ -n "$TEXT" ]]; then
         if [[ "$TEXT" == "/subenum -h" ]]; then
           send_msg "$(help_menu)"
-
         elif [[ "$TEXT" == /subenum* ]]; then
           # Either /subenum <domain> OR /subenum <file.txt>
           read -r _cmd arg <<<"$TEXT"
@@ -345,7 +347,6 @@ while true; do
             # Single domain mode
             run_enum "$arg"
           fi
-
         elif [[ "$TEXT" == /httpx* ]]; then
           # /httpx <file.txt>
           read -r _cmd arg <<<"$TEXT"
@@ -355,15 +356,12 @@ while true; do
             set_wait_state "httpx" "$arg"
             send_msg "📥 Send the file '$arg' now. I will start httpx as soon as I receive it."
           fi
-        fi
-      fi
-
         elif [[ "$TEXT" == /nuclei* ]]; then
           read -r _cmd file _t mode <<<"$TEXT"
-          if [[ -z "$file" || "$file" != *.txt || -z "$mode" ]]; then
-            send_msg "❌ Usage: /nuclei urls.txt -t private|public"
+          if [[ -z "$file" || "$file" != *.txt || -z "$mode" || "${mode,,}" != "private" && "${mode,,}" != "public" ]]; then
+            send_msg "❌ Usage: /nuclei <file.txt> -t private|public"
           else
-            set_wait_state "nuclei:$mode" "$file"
+            set_wait_state "nuclei:${mode,,}" "$file"
             send_msg "📥 Send the file '$file' now. I will start nuclei ($mode) when received."
           fi
         fi
@@ -375,7 +373,7 @@ while true; do
           ACTION=$(get_state_val "action")
           EXPECTED=$(get_state_val "expected")
 
-          if [[ -n "$EXPECTED" && "$DOC_NAME" != "$EXPECTED" ]]; then
+          if [[ -n "$EXPECTED" && "${DOC_NAME,,}" != "${EXPECTED,,}" ]]; then
             send_msg "⚠️ Received '$DOC_NAME' but I'm waiting for '$EXPECTED'. Please resend the correct file."
             continue
           fi
@@ -395,6 +393,9 @@ while true; do
             run_enum "$LOCAL_PATH"
           elif [[ "$ACTION" == "httpx" ]]; then
             run_httpx "$LOCAL_PATH"
+          elif [[ "$ACTION" == nuclei:* ]]; then
+            MODE=${ACTION#nuclei:}
+            run_nuclei "$LOCAL_PATH" "$MODE"
           else
             send_msg "⚠️ Unknown pending action '$ACTION'."
           fi
@@ -404,8 +405,8 @@ while true; do
           [[ -n "$LOCAL_PATH" ]] && send_msg "📎 Saved file '$DOC_NAME' to server."
         fi
       fi
-
     done
   fi
   sleep 5
 done
+
